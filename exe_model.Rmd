@@ -1,0 +1,98 @@
+---
+title: "Human Activity Recognition"
+author: "Claudia Erika Hernandez Patiño"
+date: "9/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(magrittr)
+library(naniar)
+library(caret)
+
+```
+Many new devices collect a large amount of data about the personal activity. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify quality. With data from  http://groupware.les.inf.puc-rio.br/har that use accelerometers from the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways
+
+# Data partition and exploration
+
+We used 60% of the data to train and 40% to test.  
+As we can see, the first rows seemed to be descriptive data. Although some of the variations may be explained by users, we are more interested in being able to identify any wrong movement. Therefore, we are going to eliminate some of the variables such as user, timestamp,  number window, or row number.
+```{r data_proces}
+set.seed(1294)
+w_exce_data<-fread("pml-training.csv",data.table = T)  #https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+trainIndex <- createDataPartition(w_exce_data$classe, p = .6, 
+                                  list = FALSE, 
+                                  times = 1)# partioning data
+val_exce <- w_exce_data[-trainIndex] 
+train_exce <- w_exce_data[trainIndex]
+summary(train_exce)
+desc_var <- train_exce[,1:7] %>% names()#names of unsusable descriptive variables
+```
+To have a more stable model, we decided to focus on some common problems, missing values and no variance variables.
+
+```{r fig.height=15,fig.width=15}
+train_exce[,c(desc_var):=NULL]
+with_mising<- train_exce[,lapply(.SD, function(col) sum(is.na(col)))] %>% #count nas
+  melt() %>% 
+  .[value>0,variable] %>% # chose columns with at least a missing value
+  as.vector()
+vis_miss(train_exce[sample(.N,9000),..with_mising]) #
+```
+
+As shown in the figure columns with missing values have near 90% of missing values. Additionally, most variables have enough variation.
+```{r }
+train_exce[,c(with_mising):=NULL]
+nzv <- nearZeroVar(train_exce, saveMetrics= TRUE)
+nzv[nzv$nzv,]
+```
+As seen in the corplot some measurements might be redundant, having variables with high correlation. We are going to try a random forest model with a naive approach, and compare the results preprocessing with PCA.
+
+```{r fig.width=10,fig.height=10,warning=FALSE,message=F}
+library(corrplot)
+library(Hmisc)
+cor_var <- train_exce[,-"classe"] %>%
+    as.matrix() %>% 
+  rcorr()
+corrplot(cor_var$r,order="hclust",
+          type="upper", tl.cex=.8,
+         p.mat = cor_var$P, sig.level = 0.01, insig = "blank")
+
+```
+
+```{r }
+library(parallel)
+library(doParallel)
+
+train_exce[,classe := as.factor(classe)]
+rf_model <- train(classe~. ,train_exce,method="ranger",num.threads = 5)
+rf_pca_model <- train(classe~.,train_exce,method="ranger",
+                      preProcess = "pca", num.threads = 5)
+rf_model$finalModel
+rf_pca_model$finalModel
+##Pre process test data
+val_exce[,c(desc_var,with_mising):=NULL]
+val_exce[,classe := as.factor(classe)]
+##acurracy out of sample
+confusionMatrix(val_exce[,classe],
+                predict.train(rf_model,val_exce))
+confusionMatrix(val_exce[,classe],
+                predict.train(rf_pca_model,val_exce))
+```
+
+
+As we can see the best model on either out of sample and in sample error is the naive model with good accuracy.
+
+# Conclusion 
+
+A simple random forest can predict with good accuracy the type of error while doing a barbell
+
+# Test
+
+<!-- ```{r } -->
+<!-- test_data <- fread("pml-testing.csv") -->
+<!-- test_data[,c(desc_var,with_mising):=NULL] -->
+<!-- predict.train(rf_model,test_data) -->
+
+<!-- ``` -->
