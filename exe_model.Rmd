@@ -32,7 +32,7 @@ desc_var <- train_exce[,1:7] %>% names()#names of unsusable descriptive variable
 ```
 To have a more stable model, we decided to focus on some common problems, missing values and no variance variables.
 
-```{r fig.height=15,fig.width=15}
+```{r dpi=36, fig.height=15*.9,fig.width=15*.9}
 train_exce[,c(desc_var):=NULL]
 with_mising<- train_exce[,lapply(.SD, function(col) sum(is.na(col)))] %>% #count nas
   melt() %>% 
@@ -49,7 +49,7 @@ nzv[nzv$nzv,]
 ```
 As seen in the corplot some measurements might be redundant, having variables with high correlation. We are going to try a random forest model with a naive approach, and compare the results preprocessing with PCA.
 
-```{r fig.width=10,fig.height=10,warning=FALSE,message=F}
+```{r dpi=36,fig.width=10*0.9,fig.height=10*0.9,warning=FALSE,message=F}
 library(corrplot)
 library(Hmisc)
 cor_var <- train_exce[,-"classe"] %>%
@@ -90,9 +90,9 @@ A simple random forest can predict with good accuracy the type of error while do
 
 # Test
 
-<!-- ```{r } -->
-<!-- test_data <- fread("pml-testing.csv") -->
-<!-- test_data[,c(desc_var,with_mising):=NULL] -->
-<!-- predict.train(rf_model,test_data) -->
+```{r }
+test_data <- fread("pml-testing.csv")
+test_data[,c(desc_var,with_mising):=NULL]
+predict.train(rf_model,test_data)
 
-<!-- ``` -->
+```
